@@ -1,413 +1,305 @@
-const https = require("https");
-const http = require("http");
+const https = require(“https”);
+const http  = require(“http”);
 
-// ─── CONFIG (set these as Netlify env vars) ────────────────────────────────
-const REDDIT_CLIENT_ID     = process.env.REDDIT_CLIENT_ID     || "";
-const REDDIT_CLIENT_SECRET = process.env.REDDIT_CLIENT_SECRET || "";
-const REDDIT_USER_AGENT    = "GlitchHunterBot/2.0 (by /u/glitchhunterapp)";
-
-// ─── KEYWORD FILTERS ───────────────────────────────────────────────────────
-const MINI_PC_KEYWORDS = [
-  "mini pc", "mini computer", "nuc", "beelink", "gmktec", "minisforum",
-  "geekom", "acemagic", "kamrui", "bosgame", "trigkey", "aoostar",
-  "raspberry pi", "mac mini", "intel nuc", "nucbox", "ser5", "ser6",
-  "ser7", "ser8", "mele", "firebat", "chatreey", "morefine",
-  "asus nuc", "lenovo tiny", "hp mini", "dell micro", "optiplex micro",
-  "thinkcentre tiny", "compute stick", "4x4 box",
+const GLITCH_KW = [
+“glitch”,“price error”,“price mistake”,“misprice”,“mispriced”,
+“accidental”,“wrong price”,“pricing error”,“lowest ever”,“all time low”,
+“record low”,“lowest price ever”,“price drop”,“flash sale”,“lightning deal”,
+“coupon stack”,“deal alert”,“price match”,“checkout glitch”,
+“insane deal”,“crazy deal”,“massive discount”,“huge discount”,
 ];
 
-const GLITCH_KEYWORDS = [
-  "glitch", "price error", "price mistake", "misprice", "mispriced",
-  "accidental", "wrong price", "pricing error", "price drop",
-  "lowest ever", "all time low", "record low", "lowest price",
-  "massive discount", "huge deal", "crazy deal", "insane deal",
-  "too good", "checkout glitch", "coupon stack", "price match",
-  "flash sale", "lightning deal", "deal alert", "price alert",
-  "slickdeals", "front page deal", "hot deal",
+const DEAD_KW = [
+“expired”,“out of stock”,“sold out”,“no longer available”,“deal ended”,
+“price changed”,“link dead”,“removed”,“deleted”,”[expired]”,
+“(expired)”,“deal is dead”,“ymmv expired”,“unavailable”,
 ];
 
-const DEAD_DEAL_SIGNALS = [
-  "expired", "out of stock", "sold out", "no longer available",
-  "deal ended", "price changed", "link dead", "404", "removed",
-  "deleted", "oos", "[expired]", "(expired)", "deal is dead",
-  "ymmv expired",
-];
-
-const EXCLUDE_KEYWORDS = [
-  "phone", "tablet", "ipad", "iphone", "watch", "headphone",
-  "airpod", "earphone", "earbud", "kindle", "echo dot", "fire stick",
-  "smart tv", "tv stand", "monitor arm", "mouse pad",
-];
-
-// ─── FETCH HELPER ──────────────────────────────────────────────────────────
-function fetchUrl(url, options = {}, timeoutMs = 9000) {
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith("https") ? https : http;
-    const opts = {
-      headers: {
-        "User-Agent": options.userAgent || "Mozilla/5.0 (compatible; GlitchHunter/2.0)",
-        "Accept": "application/rss+xml, application/xml, application/json, text/xml, */*",
-        ...(options.headers || {}),
-      },
-    };
-    const req = lib.get(url, opts, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchUrl(res.headers.location, options, timeoutMs).then(resolve).catch(reject);
-        return;
-      }
-      if (res.statusCode === 429) { reject(new Error("Rate limited")); return; }
-      if (res.statusCode >= 400) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => resolve(data));
-    });
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error("Timeout")); });
-    req.on("error", reject);
-  });
+function fetchUrl(url, timeoutMs = 9000) {
+return new Promise((resolve, reject) => {
+const lib = url.startsWith(“https”) ? https : http;
+const req = lib.get(url, {
+headers: {
+“User-Agent”: “Mozilla/5.0 (compatible; GlitchHunterBot/3.0)”,
+“Accept”: “application/rss+xml, application/xml, text/xml, application/json, */*”,
+“Accept-Language”: “en-US,en;q=0.9”,
+},
+}, (res) => {
+if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location) {
+const next = res.headers.location.startsWith(“http”)
+? res.headers.location
+: new URL(res.headers.location, url).href;
+fetchUrl(next, timeoutMs).then(resolve).catch(reject);
+return;
+}
+if (res.statusCode === 429) { reject(new Error(“Rate limited”)); return; }
+if (res.statusCode >= 400) { reject(new Error(“HTTP “ + res.statusCode)); return; }
+const chunks = [];
+res.on(“data”, c => chunks.push(c));
+res.on(“end”, () => resolve(Buffer.concat(chunks).toString(“utf8”)));
+});
+req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error(“Timeout”)); });
+req.on(“error”, reject);
+});
 }
 
-// ─── POST HELPER (for Reddit OAuth token) ─────────────────────────────────
-function postUrl(url, body, headers = {}, timeoutMs = 8000) {
-  return new Promise((resolve, reject) => {
-    const auth = Buffer.from(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`).toString("base64");
-    const postData = typeof body === "string" ? body : new URLSearchParams(body).toString();
-    const urlObj = new URL(url);
-    const opts = {
-      hostname: urlObj.hostname,
-      path: urlObj.pathname + urlObj.search,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Content-Length": Buffer.byteLength(postData),
-        "Authorization": `Basic ${auth}`,
-        "User-Agent": REDDIT_USER_AGENT,
-        ...headers,
-      },
-    };
-    const req = https.request(opts, (res) => {
-      let data = "";
-      res.on("data", (c) => (data += c));
-      res.on("end", () => resolve(data));
-    });
-    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error("Timeout")); });
-    req.on("error", reject);
-    req.write(postData);
-    req.end();
-  });
+function parseRSS(xml, source, color) {
+const items = [];
+const blocks = xml.match(/<item[\s\S]*?</item>/gi) || [];
+const now = Date.now();
+const FRESH = 72 * 60 * 60 * 1000;
+
+for (const block of blocks) {
+const get = (tag) => {
+const m =
+block.match(new RegExp(”<” + tag + “[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/” + tag + “>”, “i”)) ||
+block.match(new RegExp(”<” + tag + “[^>]*>([\s\S]*?)<\/” + tag + “>”, “i”));
+return m ? m[1].replace(/<[^>]+>/g, “ “).replace(/\s+/g, “ “).trim() : “”;
+};
+
+```
+const title   = get("title");
+const desc    = get("description");
+const link    = get("link") || get("guid");
+const pubDate = get("pubDate") || get("dc:date") || get("pubdate");
+
+if (!title || title.length < 4) continue;
+
+if (pubDate) {
+  const ts = new Date(pubDate).getTime();
+  if (!isNaN(ts) && now - ts > FRESH) continue;
 }
 
-// ─── REDDIT OAUTH TOKEN ────────────────────────────────────────────────────
-let redditTokenCache = { token: null, expires: 0 };
+const combined = (title + " " + desc).toLowerCase();
+if (DEAD_KW.some(k => combined.includes(k))) continue;
+
+const isGlitch   = GLITCH_KW.some(k => combined.includes(k));
+const priceMatch = (title + " " + desc).match(/\$[\d,]+(?:\.\d{2})?/);
+const discMatch  = (title + " " + desc).match(/(\d{1,3})%\s*off/i);
+const ts         = pubDate ? (new Date(pubDate).getTime() || now) : now;
+
+items.push({
+  id:       Buffer.from(title.slice(0, 40)).toString("base64").replace(/[^a-zA-Z0-9]/g, "").slice(0, 14),
+  title:    title.slice(0, 130),
+  desc:     desc.slice(0, 300),
+  link:     link || "",
+  extLink:  null,
+  source,   color,
+  isGlitch,
+  price:    priceMatch ? priceMatch[0] : null,
+  discount: discMatch  ? parseInt(discMatch[1]) : null,
+  timestamp: ts,
+  score: null, comments: null, flair: null,
+});
+```
+
+}
+return items;
+}
+
+const RSS_SOURCES = [
+{ url: “https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=amazon&rss=1”,          name: “Slickdeals”,      color: “#e63946” },
+{ url: “https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=price+error&rss=1”,    name: “Slickdeals”,      color: “#e63946” },
+{ url: “https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=glitch&rss=1”,         name: “Slickdeals”,      color: “#e63946” },
+{ url: “https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=lightning+deal&rss=1”, name: “Slickdeals”,      color: “#e63946” },
+{ url: “https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&rss=1”,                  name: “Slickdeals Hot”,  color: “#e63946” },
+{ url: “https://www.dealnews.com/c142/Computers/?srcval=rss_main”,                                    name: “Dealnews”,        color: “#2a9d8f” },
+{ url: “https://www.dealnews.com/c232/Electronics/?srcval=rss_main”,                                  name: “Dealnews”,        color: “#2a9d8f” },
+{ url: “https://www.dealnews.com/c196/Home-Garden/?srcval=rss_main”,                                  name: “Dealnews”,        color: “#2a9d8f” },
+{ url: “https://www.dealnews.com/c238/Clothing-Accessories/?srcval=rss_main”,                         name: “Dealnews”,        color: “#2a9d8f” },
+{ url: “https://9to5toys.com/feed/”,                                                                  name: “9to5Toys”,        color: “#0066cc” },
+{ url: “https://9to5mac.com/feed/”,                                                                   name: “9to5Mac”,         color: “#555555” },
+{ url: “https://9to5google.com/feed/”,                                                                name: “9to5Google”,      color: “#34a853” },
+{ url: “https://techbargains.com/feed/”,                                                              name: “TechBargains”,    color: “#457b9d” },
+{ url: “https://bensbargains.com/feed/”,                                                              name: “BensBargains”,    color: “#c77dff” },
+{ url: “https://www.bradsdeals.com/blog/feed”,                                                        name: “BradsDeals”,      color: “#e9c46a” },
+{ url: “https://www.thepennyhoarder.com/feed/”,                                                       name: “PennyHoarder”,    color: “#f4a261” },
+{ url: “https://camelcamelcamel.com/top_drops/feed?n=25”,                                             name: “CamelCamelCamel”, color: “#6a0572” },
+{ url: “https://www.hotukdeals.com/rss/deals”,                                                        name: “HotUKDeals”,      color: “#e76f51” },
+{ url: “https://www.nytimes.com/wirecutter/deals/feed/”,                                              name: “Wirecutter”,      color: “#326891” },
+];
+
+const REDDIT_ID     = process.env.REDDIT_CLIENT_ID     || “”;
+const REDDIT_SECRET = process.env.REDDIT_CLIENT_SECRET || “”;
+const UA            = “GlitchHunterBot/3.0”;
+let rdCache         = { token: null, exp: 0 };
 
 async function getRedditToken() {
-  if (redditTokenCache.token && Date.now() < redditTokenCache.expires) {
-    return redditTokenCache.token;
-  }
-  if (!REDDIT_CLIENT_ID || !REDDIT_CLIENT_SECRET) return null;
-  try {
-    const raw = await postUrl(
-      "https://www.reddit.com/api/v1/access_token",
-      { grant_type: "client_credentials" }
-    );
-    const j = JSON.parse(raw);
-    if (!j.access_token) return null;
-    redditTokenCache = { token: j.access_token, expires: Date.now() + (j.expires_in - 60) * 1000 };
-    return j.access_token;
-  } catch (e) {
-    return null;
-  }
+if (rdCache.token && Date.now() < rdCache.exp) return rdCache.token;
+if (!REDDIT_ID || !REDDIT_SECRET) return null;
+try {
+const auth = Buffer.from(REDDIT_ID + “:” + REDDIT_SECRET).toString(“base64”);
+const body = “grant_type=client_credentials”;
+const raw  = await new Promise((resolve, reject) => {
+const req = https.request({
+hostname: “www.reddit.com”,
+path: “/api/v1/access_token”,
+method: “POST”,
+headers: {
+“Authorization”:  “Basic “ + auth,
+“Content-Type”:   “application/x-www-form-urlencoded”,
+“Content-Length”: Buffer.byteLength(body),
+“User-Agent”:     UA,
+},
+}, (res) => {
+let d = “”;
+res.on(“data”, c => d += c);
+res.on(“end”, () => resolve(d));
+});
+req.setTimeout(7000, () => { req.destroy(); reject(new Error(“Timeout”)); });
+req.on(“error”, reject);
+req.write(body);
+req.end();
+});
+const j = JSON.parse(raw);
+if (!j.access_token) return null;
+rdCache = { token: j.access_token, exp: Date.now() + (j.expires_in - 60) * 1000 };
+return j.access_token;
+} catch (e) {
+return null;
+}
 }
 
-// ─── REDDIT FETCHER ────────────────────────────────────────────────────────
-async function fetchReddit(subreddit, query = "", sort = "new", limit = 25) {
-  const token = await getRedditToken();
-  const base  = token ? "https://oauth.reddit.com" : "https://www.reddit.com";
-  const headers = token
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+async function fetchReddit(sub, query, sort, limit) {
+sort  = sort  || “new”;
+limit = limit || 25;
+try {
+const token = await getRedditToken();
+const base  = token ? “https://oauth.reddit.com” : “https://www.reddit.com”;
+const hdrs  = token
+? { “Authorization”: “Bearer “ + token, “User-Agent”: UA }
+: { “User-Agent”: UA };
 
-  let url;
-  if (query) {
-    url = `${base}/r/${subreddit}/search.json?q=${encodeURIComponent(query)}&sort=${sort}&restrict_sr=1&limit=${limit}&t=week`;
-  } else {
-    url = `${base}/r/${subreddit}/${sort}.json?limit=${limit}`;
-  }
+```
+const path = query
+  ? "/r/" + sub + "/search.json?q=" + encodeURIComponent(query) + "&sort=" + sort + "&restrict_sr=1&limit=" + limit + "&t=week"
+  : "/r/" + sub + "/" + sort + ".json?limit=" + limit;
 
-  const raw  = await fetchUrl(url, { userAgent: REDDIT_USER_AGENT, headers }, 9000);
-  const json = JSON.parse(raw);
-  const posts = json?.data?.children || [];
+const raw  = await fetchUrl(base + path);
+const json = JSON.parse(raw);
+const posts = (json && json.data && json.data.children) ? json.data.children : [];
+const now   = Date.now();
+const FRESH = 72 * 60 * 60 * 1000;
 
-  return posts.map((p) => {
-    const d = p.data;
-    const combined = ((d.title || "") + " " + (d.selftext || "")).toLowerCase();
-    const isDead = DEAD_DEAL_SIGNALS.some((s) => combined.includes(s));
-    const score  = d.score || 0;
-    // Only return posts with some upvotes or very new (not dead)
-    if (isDead && score < 5) return null;
-
-    const isGlitch = GLITCH_KEYWORDS.some((k) => combined.includes(k));
-    const priceMatch    = (d.title + " " + (d.selftext||"")).match(/\$[\d,]+(?:\.\d{2})?/);
-    const discountMatch = (d.title + " " + (d.selftext||"")).match(/(\d{1,3})%\s*off/i);
-
-    return {
-      id:          d.id,
-      title:       (d.title || "").slice(0, 130),
-      description: (d.selftext || "").slice(0, 400).replace(/\n+/g, " ").trim(),
-      link:        `https://reddit.com${d.permalink}`,
-      externalLink: d.url && !d.url.includes("reddit.com") ? d.url : null,
-      source:      `r/${subreddit}`,
-      sourceColor: "#ff6314",
-      isGlitch,
-      isDead,
-      score,
-      price:       priceMatch    ? priceMatch[0]         : null,
-      discount:    discountMatch ? parseInt(discountMatch[1]) : null,
-      timestamp:   d.created_utc ? d.created_utc * 1000 : Date.now(),
-      numComments: d.num_comments || 0,
-      flair:       d.link_flair_text || null,
-    };
-  }).filter(Boolean);
-}
-
-// ─── RSS PARSER ────────────────────────────────────────────────────────────
-function parseRSS(xml, sourceName, sourceColor) {
-  const items = [];
-  const itemMatches = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
-
-  for (const item of itemMatches) {
-    const get = (tag) => {
-      const m = item.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`, "i"))
-        || item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-      return m ? m[1].replace(/<[^>]+>/g, "").trim() : "";
-    };
-
-    const title   = get("title");
-    const desc    = get("description");
-    const link    = get("link") || get("guid");
-    const pubDate = get("pubDate") || get("dc:date");
-    const combined = (title + " " + desc).toLowerCase();
-
-    if (!title || title.length < 5) continue;
-
-    // Freshness check — skip items older than 72 hours
-    if (pubDate) {
-      const age = Date.now() - new Date(pubDate).getTime();
-      if (age > 72 * 60 * 60 * 1000) continue;
-    }
-
-    // Keyword relevance
-    const isRelevant = MINI_PC_KEYWORDS.some((k) => combined.includes(k));
-    const isExcluded = EXCLUDE_KEYWORDS.some((k) => combined.includes(k));
-    if (!isRelevant || isExcluded) continue;
-
-    // Dead deal check
-    const isDead = DEAD_DEAL_SIGNALS.some((s) => combined.includes(s));
-    if (isDead) continue;
-
-    const isGlitch   = GLITCH_KEYWORDS.some((k) => combined.includes(k));
-    const priceMatch = (title + " " + desc).match(/\$[\d,]+(?:\.\d{2})?/);
-    const discMatch  = (title + " " + desc).match(/(\d{1,3})%\s*off/i);
-
-    items.push({
-      id:          Buffer.from(title + link).toString("base64").slice(0, 16),
-      title:       title.slice(0, 130),
-      description: desc.slice(0, 400),
-      link,
-      source:      sourceName,
-      sourceColor,
-      isGlitch,
-      isDead:      false,
-      price:       priceMatch ? priceMatch[0]         : null,
-      discount:    discMatch  ? parseInt(discMatch[1]) : null,
-      timestamp:   pubDate ? new Date(pubDate).getTime() : Date.now(),
-      numComments: null,
-      flair:       null,
-      score:       null,
-    });
-  }
-  return items;
-}
-
-// ─── RSS SOURCES ────────────────────────────────────────────────────────────
-const RSS_SOURCES = [
-  // Slickdeals
-  {
-    name: "Slickdeals",
-    color: "#e63946",
-    url: "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=mini+pc&rss=1",
-  },
-  {
-    name: "Slickdeals",
-    color: "#e63946",
-    url: "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=beelink&rss=1",
-  },
-  {
-    name: "Slickdeals",
-    color: "#e63946",
-    url: "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=price+error+computer&rss=1",
-  },
-  {
-    name: "Slickdeals",
-    color: "#e63946",
-    url: "https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=gmktec&rss=1",
-  },
-  // Dealnews
-  {
-    name: "Dealnews",
-    color: "#2a9d8f",
-    url: "https://www.dealnews.com/c142/Computers/?srcval=rss_main",
-  },
-  // 9to5Toys
-  {
-    name: "9to5Toys",
-    color: "#0066cc",
-    url: "https://9to5toys.com/feed/",
-  },
-  // The Wirecutter / NYT Deals
-  {
-    name: "Wirecutter Deals",
-    color: "#111",
-    url: "https://www.nytimes.com/wirecutter/deals/feed/",
-  },
-  // TechBargains
-  {
-    name: "TechBargains",
-    color: "#457b9d",
-    url: "https://techbargains.com/feed/",
-  },
-  // HotUKDeals (catches Amazon.com glitches too)
-  {
-    name: "HotUKDeals",
-    color: "#e76f51",
-    url: "https://www.hotukdeals.com/rss/deals/computers-accessories",
-  },
-  // CamelCamelCamel top drops
-  {
-    name: "CamelCamelCamel",
-    color: "#6a0572",
-    url: "https://camelcamelcamel.com/top_drops/feed?n=25",
-  },
-  // BensBargains
-  {
-    name: "BensBargains",
-    color: "#c77dff",
-    url: "https://bensbargains.com/feed/",
-  },
-  // DealNews computers
-  {
-    name: "DealNews Tech",
-    color: "#2a9d8f",
-    url: "https://www.dealnews.com/c232/Electronics/?srcval=rss_main",
-  },
-];
-
-// ─── REDDIT SOURCES ────────────────────────────────────────────────────────
-const REDDIT_SOURCES = [
-  { sub: "buildapcsales",   query: "mini pc",       sort: "new"  },
-  { sub: "buildapcsales",   query: "beelink",        sort: "new"  },
-  { sub: "buildapcsales",   query: "gmktec",         sort: "new"  },
-  { sub: "buildapcsales",   query: "price error",    sort: "new"  },
-  { sub: "PCDeals",         query: "mini pc",        sort: "new"  },
-  { sub: "PCDeals",         query: "glitch",         sort: "new"  },
-  { sub: "hardware_swap",   query: "mini pc",        sort: "new"  },
-  { sub: "frugal",          query: "mini pc glitch", sort: "new"  },
-  { sub: "Deals",           query: "mini pc",        sort: "new"  },
-  { sub: "DealAlert",       query: "mini pc",        sort: "new"  },
-  { sub: "amazondealsusa",  query: "mini pc",        sort: "new"  },
-];
-
-// ─── DEDUP + VALIDATE ──────────────────────────────────────────────────────
-function deduplicateAndValidate(items) {
-  const seen = new Set();
-  return items.filter((d) => {
-    if (!d || !d.title) return false;
-    // Skip dead deals
-    if (d.isDead) return false;
-    // Skip very low-effort Reddit posts (no upvotes, probably spam)
-    if (d.score !== null && d.score < 1) return false;
-    // Dedup by normalized title prefix
-    const key = d.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 35);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-// ─── MAIN HANDLER ──────────────────────────────────────────────────────────
-exports.handler = async (event) => {
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Content-Type": "application/json",
-    "Cache-Control": "public, max-age=1800", // 30 min cache
+return posts.map(function(p) {
+  const d = p.data;
+  if (!d || !d.title) return null;
+  const ts = d.created_utc ? d.created_utc * 1000 : now;
+  if (now - ts > FRESH) return null;
+  const combined = ((d.title || "") + " " + (d.selftext || "")).toLowerCase();
+  if (DEAD_KW.some(k => combined.includes(k)) && (d.score || 0) < 10) return null;
+  const isGlitch   = GLITCH_KW.some(k => combined.includes(k));
+  const priceMatch = (d.title + " " + (d.selftext || "")).match(/\$[\d,]+(?:\.\d{2})?/);
+  const discMatch  = (d.title + " " + (d.selftext || "")).match(/(\d{1,3})%\s*off/i);
+  const extLink    = d.url && d.url.startsWith("http") && !d.url.includes("reddit.com") ? d.url : null;
+  return {
+    id:       d.id || "",
+    title:    (d.title || "").slice(0, 130),
+    desc:     (d.selftext || "").replace(/\n+/g, " ").slice(0, 300),
+    link:     "https://reddit.com" + (d.permalink || ""),
+    extLink,
+    source:   "r/" + sub,
+    color:    "#ff6314",
+    isGlitch,
+    price:    priceMatch ? priceMatch[0] : null,
+    discount: discMatch  ? parseInt(discMatch[1]) : null,
+    timestamp: ts,
+    score:    d.score        || 0,
+    comments: d.num_comments || 0,
+    flair:    d.link_flair_text || null,
   };
+}).filter(Boolean);
+```
 
-  try {
-    // ── Fetch all RSS sources in parallel ──────────────────────────────────
-    const rssResults = await Promise.allSettled(
-      RSS_SOURCES.map(async (src) => {
-        try {
-          const xml = await fetchUrl(src.url);
-          return parseRSS(xml, src.name, src.color);
-        } catch (e) {
-          return [];
-        }
-      })
-    );
+} catch(e) {
+return [];
+}
+}
 
-    // ── Fetch all Reddit sources in parallel ───────────────────────────────
-    const redditResults = await Promise.allSettled(
-      REDDIT_SOURCES.map(async (src) => {
-        try {
-          return await fetchReddit(src.sub, src.query, src.sort, 25);
-        } catch (e) {
-          return [];
-        }
-      })
-    );
+const REDDIT_SOURCES = [
+{ sub: “deals”,          query: “”,            sort: “hot” },
+{ sub: “deals”,          query: “amazon”,      sort: “new” },
+{ sub: “deals”,          query: “glitch”,      sort: “new” },
+{ sub: “buildapcsales”,  query: “”,            sort: “hot” },
+{ sub: “buildapcsales”,  query: “price error”, sort: “new” },
+{ sub: “PCDeals”,        query: “”,            sort: “hot” },
+{ sub: “PCDeals”,        query: “glitch”,      sort: “new” },
+{ sub: “frugal”,         query: “amazon”,      sort: “new” },
+{ sub: “DealAlert”,      query: “”,            sort: “new” },
+{ sub: “amazondealsusa”, query: “”,            sort: “new” },
+{ sub: “GoodValue”,      query: “”,            sort: “hot” },
+{ sub: “SaleHunters”,    query: “”,            sort: “new” },
+];
 
-    // ── Combine + clean ────────────────────────────────────────────────────
-    const rssItems    = rssResults.flatMap((r)    => r.status === "fulfilled" ? r.value : []);
-    const redditItems = redditResults.flatMap((r) => r.status === "fulfilled" ? r.value : []);
-    const allRaw      = [...rssItems, ...redditItems];
+exports.handler = async function(event) {
+const headers = {
+“Access-Control-Allow-Origin”:  “*”,
+“Access-Control-Allow-Methods”: “GET, OPTIONS”,
+“Content-Type”:                 “application/json”,
+“Cache-Control”:                “public, max-age=1800”,
+};
 
-    // Validate, deduplicate
-    let allDeals = deduplicateAndValidate(allRaw);
+if (event.httpMethod === “OPTIONS”) {
+return { statusCode: 200, headers, body: “” };
+}
 
-    // Sort by timestamp desc
-    allDeals.sort((a, b) => b.timestamp - a.timestamp);
+try {
+const [rssResults, rdResults] = await Promise.all([
+Promise.allSettled(
+RSS_SOURCES.map(s =>
+fetchUrl(s.url)
+.then(xml => parseRSS(xml, s.name, s.color))
+.catch(() => [])
+)
+),
+Promise.allSettled(
+REDDIT_SOURCES.map(s => fetchReddit(s.sub, s.query, s.sort))
+),
+]);
 
-    const glitches = allDeals.filter((d) => d.isGlitch);
-    const deals    = allDeals.filter((d) => !d.isGlitch);
+```
+const rssItems = rssResults.flatMap(r => r.status === "fulfilled" ? r.value : []);
+const rdItems  = rdResults.flatMap(r  => r.status === "fulfilled" ? r.value : []);
+let all = [...rssItems, ...rdItems];
 
-    // Source breakdown for stats
-    const sourceCounts = {};
-    allDeals.forEach((d) => {
-      sourceCounts[d.source] = (sourceCounts[d.source] || 0) + 1;
-    });
+const seen = new Set();
+all = all.filter(d => {
+  if (!d || !d.title) return false;
+  const key = d.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
+  if (seen.has(key)) return false;
+  seen.add(key);
+  return true;
+});
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        lastUpdated: new Date().toISOString(),
-        redditEnabled: !!(REDDIT_CLIENT_ID && REDDIT_CLIENT_SECRET),
-        stats: {
-          total:    allDeals.length,
-          glitches: glitches.length,
-          deals:    deals.length,
-          sources:  Object.keys(sourceCounts).length,
-          sourceCounts,
-        },
-        glitches,
-        deals,
-      }),
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ success: false, error: err.message }),
-    };
-  }
+all.sort((a, b) => b.timestamp - a.timestamp);
+
+const glitches = all.filter(d => d.isGlitch);
+const deals    = all.filter(d => !d.isGlitch);
+const sourceCounts = {};
+all.forEach(d => { sourceCounts[d.source] = (sourceCounts[d.source] || 0) + 1; });
+
+return {
+  statusCode: 200,
+  headers,
+  body: JSON.stringify({
+    ok: true,
+    ts: new Date().toISOString(),
+    redditOn: !!(REDDIT_ID && REDDIT_SECRET),
+    stats: {
+      total: all.length, glitches: glitches.length,
+      deals: deals.length, sources: Object.keys(sourceCounts).length,
+      sourceCounts,
+    },
+    glitches, deals,
+  }),
+};
+```
+
+} catch (err) {
+return {
+statusCode: 500,
+headers,
+body: JSON.stringify({ ok: false, error: err.message }),
+};
+}
 };
