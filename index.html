@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>GlitchHunter — Amazon Deal Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+:root{
+  --bg:#07090e;--bg2:#0c1018;--bg3:#111822;--bg4:#161f2e;
+  --border:#1a2535;--border2:#243045;
+  --text:#c5d5e8;--dim:#4a6080;--mute:#1e2f42;
+  --cyan:#00e5ff;--red:#ff3860;--green:#23ff8a;
+  --gold:#ffd147;--purple:#c084fc;--orange:#ff8c42;
+  --mono:'IBM Plex Mono',monospace;
+  --display:'Bebas Neue',sans-serif;
+  --sans:'DM Sans',sans-serif;
+  --r:10px;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;line-height:1.6;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,229,255,.006) 3px,rgba(0,229,255,.006) 4px);}
+.glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 80% 40% at 50% -5%,rgba(0,229,255,.07) 0%,transparent 70%),
+             radial-gradient(ellipse 50% 60% at 100% 70%,rgba(255,56,96,.04) 0%,transparent 60%);}
+.wrap{position:relative;z-index:1;max-width:700px;margin:0 auto;padding:0 14px 60px;}
+
+/* ── HEADER ── */
+header{padding:18px 0 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.logo{font-family:var(--display);font-size:26px;letter-spacing:2px;
+  color:var(--cyan);text-shadow:0 0 24px rgba(0,229,255,.4);line-height:1;}
+.logo-sub{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-top:3px;}
+.scan-btn{
+  display:flex;align-items:center;gap:7px;
+  background:var(--cyan);color:var(--bg);
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  letter-spacing:1.5px;text-transform:uppercase;
+  padding:12px 18px;border:none;border-radius:var(--r);
+  cursor:pointer;white-space:nowrap;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;transition:all .15s;
+}
+.scan-btn:active{transform:scale(.96);}
+.scan-btn:disabled{opacity:.35;cursor:not-allowed;}
+.spin{display:none;}
+.scan-btn.loading .spin{display:inline-block;animation:spin .6s linear infinite;}
+.scan-btn.loading .idle{display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── LIVE BAR ── */
+.live-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--border);
+  font-size:10px;color:var(--dim);letter-spacing:1px;
+}
+.live-pill{display:flex;align-items:center;gap:6px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:blink 1s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.15}}
+.countdown{color:var(--cyan);font-weight:600;font-size:12px;}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+.stat{background:var(--bg2);padding:14px 16px;position:relative;}
+.stat::after{content:'';position:absolute;bottom:0;left:16px;width:24px;height:2px;background:var(--sc,var(--dim));}
+.stat-l{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:5px;}
+.stat-v{font-family:var(--display);font-size:28px;color:var(--sc,var(--cyan));line-height:1;letter-spacing:1px;}
+.stat-s{font-size:9px;color:var(--mute);margin-top:3px;}
+
+/* ── PANELS ── */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);margin:10px 0;overflow:hidden;}
+.panel-purple{border-left:3px solid var(--purple);}
+.panel-orange{border-left:3px solid var(--orange);}
+.ph{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.ph h4{font-family:var(--sans);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.panel-purple .ph h4{color:var(--purple);}
+.panel-orange .ph h4{color:var(--orange);}
+.ph-caret{font-size:11px;color:var(--dim);}
+.pb{padding:0 16px 16px;display:none;}
+.pb.open{display:block;}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--mute);flex-shrink:0;transition:background .3s;}
+.sdot.on{background:var(--green);box-shadow:0 0 8px rgba(35,255,138,.5);}
+
+/* fields */
+.f{margin-bottom:10px;}
+.f label{display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:5px;}
+.f input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:12px;padding:10px 12px;border-radius:8px;
+  outline:none;-webkit-appearance:none;}
+.f input:focus{border-color:var(--purple);}
+.chk-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.chk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);cursor:pointer;}
+.chk input{accent-color:var(--purple);width:15px;height:15px;}
+.btn-pair{display:flex;gap:8px;margin-top:12px;}
+.pbtn{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1px;
+  text-transform:uppercase;padding:10px 0;border-radius:8px;cursor:pointer;flex:1;
+  -webkit-tap-highlight-color:transparent;}
+.pbtn-save{background:rgba(192,132,252,.1);border:1px solid rgba(192,132,252,.3);color:var(--purple);}
+.pbtn-clear{background:transparent;border:1px solid rgba(255,56,96,.25);color:var(--red);}
+.pmsg{font-size:10px;color:var(--dim);margin-top:8px;min-height:16px;}
+
+/* reddit setup */
+.rd-setup{background:linear-gradient(135deg,rgba(255,140,66,.06),rgba(192,132,252,.06));
+  border-left:3px solid var(--orange);padding:14px 16px;margin:10px 0;border-radius:var(--r);display:none;}
+.rd-setup.show{display:block;}
+.rd-setup h4{font-family:var(--sans);font-size:13px;font-weight:700;color:var(--orange);margin-bottom:8px;}
+.rd-setup p{font-size:11px;color:var(--dim);line-height:1.85;}
+.rd-setup a{color:var(--cyan);text-decoration:none;}
+.rd-setup code{background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:1px 6px;font-size:10px;color:var(--text);}
+
+/* ── ERR ── */
+.err{background:rgba(255,56,96,.07);border:1px solid rgba(255,56,96,.2);
+  border-radius:var(--r);padding:12px 16px;font-size:11px;color:var(--red);margin:10px 0;display:none;}
+
+/* ── CONTROLS ── */
+.controls{padding:10px 0;display:flex;flex-direction:column;gap:10px;}
+.tabs{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.tab{flex:1;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;
+  padding:11px 4px;background:transparent;border:none;color:var(--dim);
+  cursor:pointer;border-right:1px solid var(--border);-webkit-tap-highlight-color:transparent;}
+.tab:last-child{border-right:none;}
+.tab.active{background:var(--bg3);color:#fff;}
+.tab.active.tg{color:var(--red);}
+.tab.active.td{color:var(--cyan);}
+.tab.active.ta{color:var(--gold);}
+.bdg{display:inline-block;font-size:9px;font-weight:700;border-radius:3px;
+  padding:1px 5px;margin-left:4px;vertical-align:middle;}
+.br{background:rgba(255,56,96,.2);color:var(--red);}
+.bc{background:rgba(0,229,255,.15);color:var(--cyan);}
+.bg{background:rgba(255,209,71,.15);color:var(--gold);}
+
+.frow{display:flex;gap:8px;}
+.fi{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:11px;padding:10px 12px;border-radius:8px;
+  outline:none;-webkit-appearance:none;min-width:0;}
+.fi:focus{border-color:var(--border2);}
+.fi::placeholder{color:var(--mute);}
+
+/* pills */
+.pills{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 2px;}
+.pill{font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:5px 10px;
+  border-radius:20px;border:1px solid var(--border);color:var(--dim);
+  cursor:pointer;background:transparent;font-family:var(--mono);-webkit-tap-highlight-color:transparent;}
+.pill.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,229,255,.06);}
+
+/* ── CARDS ── */
+.grid{display:flex;flex-direction:column;gap:10px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:14px;display:flex;flex-direction:column;gap:10px;
+  position:relative;overflow:hidden;animation:fu .25s ease both;}
+@keyframes fu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.card:active{transform:scale(.99);}
+.card.glitch{border-color:rgba(255,56,96,.3);}
+.card.glitch::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--red),#ff8c00,var(--red));
+  background-size:200% 100%;animation:sl 2s linear infinite;}
+@keyframes sl{from{background-position:0 0}to{background-position:200% 0}}
+.card.reddit{border-left:2px solid #ff6314;}
+
+.ctop{display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap;}
+.src{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;color:#fff;flex-shrink:0;}
+.flr{font-size:8px;padding:3px 8px;border-radius:4px;
+  background:var(--bg4);color:var(--dim);border:1px solid var(--border);}
+.gchip{font-size:8px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:4px;
+  margin-left:auto;background:rgba(255,56,96,.15);color:var(--red);
+  border:1px solid rgba(255,56,96,.3);animation:pc 2s ease-in-out infinite;flex-shrink:0;}
+@keyframes pc{0%,100%{opacity:1}50%{opacity:.5}}
+
+.ctitle{font-family:var(--sans);font-size:14px;font-weight:600;color:#ddeeff;line-height:1.4;}
+.cdesc{font-size:11px;color:var(--dim);line-height:1.6;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.cmeta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.mi{font-size:10px;color:var(--dim);}
+.tago{font-size:9px;color:var(--mute);margin-left:auto;}
+
+.cbot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.pblock{display:flex;align-items:baseline;gap:8px;}
+.price{font-family:var(--display);font-size:22px;letter-spacing:1px;color:var(--green);}
+.disc{font-size:9px;font-weight:700;background:rgba(35,255,138,.12);color:var(--green);
+  border:1px solid rgba(35,255,138,.25);border-radius:4px;padding:2px 7px;}
+.brow{display:flex;gap:6px;}
+.vbtn{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;
+  font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:9px 14px;
+  border-radius:8px;text-decoration:none;border:1px solid var(--border2);color:var(--text);
+  -webkit-tap-highlight-color:transparent;}
+.vbtn:active{transform:scale(.96);}
+.vbtn.rdbtn{border-color:rgba(255,99,20,.35);color:#ff6314;}
+
+/* ── STATE ── */
+.sbox{text-align:center;padding:60px 20px;}
+.sico{font-size:44px;display:block;margin-bottom:16px;}
+.sbox h3{font-family:var(--display);font-size:26px;letter-spacing:2px;color:var(--text);margin-bottom:8px;}
+.sbox p{color:var(--dim);font-size:11px;max-width:300px;margin:0 auto;line-height:1.7;}
+.ring{width:40px;height:40px;border:2px solid var(--border2);border-top-color:var(--cyan);
+  border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px;}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:16px 0;margin-top:24px;text-align:center;}
+footer p{font-size:9px;color:var(--mute);letter-spacing:1.5px;text-transform:uppercase;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="logo">GLITCHHUNTER</div>
+    <div class="logo-sub">Amazon Deal Radar · v3</div>
+  </div>
+  <button class="scan-btn" id="scanBtn" onclick="load()">
+    <span class="idle">⚡ Scan</span>
+    <span class="spin">↻</span>
+  </button>
+</header>
+
+<!-- LIVE BAR -->
+<div class="live-bar">
+  <div class="live-pill"><div class="dot"></div>LIVE RADAR</div>
+  <div>Next scan: <span class="countdown" id="cd">30:00</span></div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat" style="--sc:var(--red)">
+    <div class="stat-l">⚡ Glitches</div>
+    <div class="stat-v" id="sG">—</div>
+    <div class="stat-s">price errors</div>
+  </div>
+  <div class="stat" style="--sc:var(--cyan)">
+    <div class="stat-l">🔥 Deals</div>
+    <div class="stat-v" id="sD">—</div>
+    <div class="stat-s">live Amazon deals</div>
+  </div>
+  <div class="stat" style="--sc:var(--green)">
+    <div class="stat-l">📡 Sources</div>
+    <div class="stat-v" id="sS">—</div>
+    <div class="stat-s">feeds scanned</div>
+  </div>
+  <div class="stat" style="--sc:var(--gold)">
+    <div class="stat-l">🕑 Last Scan</div>
+    <div class="stat-v" id="sT" style="font-size:16px;padding-top:7px">—</div>
+    <div class="stat-s" id="sTa"></div>
+  </div>
+</div>
+
+<!-- REDDIT SETUP -->
+<div class="rd-setup" id="rdSetup">
+  <h4>⚙ Unlock Reddit Feeds (Free · 2 min)</h4>
+  <p>
+    Adds r/deals, r/buildapcsales, r/PCDeals, r/DealAlert &amp; more.<br><br>
+    1. Go to <a href="https://www.reddit.com/prefs/apps" target="_blank">reddit.com/prefs/apps</a> → <b>Create another app</b><br>
+    2. Type: <b>script</b> · redirect URI: <code>http://localhost</code> → Create<br>
+    3. Copy your <b>Client ID</b> (under app name) + <b>Secret</b><br>
+    4. Open Reddit Settings panel below → paste &amp; save ↓
+  </p>
+</div>
+
+<!-- TELEGRAM PANEL -->
+<div class="panel panel-purple">
+  <div class="ph" onclick="tog('tg')">
+    <h4><span class="sdot" id="tgDot"></span>📱 Telegram → BodPi Alerts</h4>
+    <span class="ph-caret" id="tgCaret">▼</span>
+  </div>
+  <div class="pb" id="tgPb">
+    <div class="f"><label>Bot Token</label><input type="password" id="tgTok" placeholder="1234567890:ABC..."/></div>
+    <div class="f"><label>Chat ID</label><input type="text" id="tgCid" placeholder="-100xxxxxxxxxx"/></div>
+    <div class="chk-row">
+      <label class="chk"><input type="checkbox" id="tgGo" checked/> Glitches only</label>
+      <label class="chk"><input type="checkbox" id="tgMd"/> Min 20% off</label>
+    </div>
+    <div class="btn-pair">
+      <button class="pbtn pbtn-save" onclick="saveTg()">Save &amp; Test</button>
+      <button class="pbtn pbtn-clear" onclick="clearTg()">Clear</button>
+    </div>
+    <div class="pmsg" id="tgMsg"></div>
+  </div>
+</div>
+
+<!-- REDDIT PANEL -->
+<div class="panel panel-orange">
+  <div class="ph" onclick="tog('rd')">
+    <h4>🔴 Reddit API Settings</h4>
+    <span class="ph-caret" id="rdCaret">▼</span>
+  </div>
+  <div class="pb" id="rdPb">
+    <div class="f"><label>Reddit Client ID</label><input type="text" id="rdId" placeholder="your client id"/></div>
+    <div class="f"><label>Reddit Secret</label><input type="password" id="rdSec" placeholder="your secret"/></div>
+    <div class="btn-pair">
+      <button class="pbtn pbtn-save" onclick="saveRd()">Save Keys</button>
+      <button class="pbtn pbtn-clear" onclick="clearRd()">Clear</button>
+    </div>
+    <div class="pmsg" id="rdMsg"></div>
+  </div>
+</div>
+
+<!-- ERROR -->
+<div class="err" id="err"></div>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="tabs">
+    <button class="tab tg active" id="tabG" onclick="setTab('g')">⚡ Glitches <span class="bdg br" id="bG">0</span></button>
+    <button class="tab td" id="tabD" onclick="setTab('d')">🔥 Deals <span class="bdg bc" id="bD">0</span></button>
+    <button class="tab ta" id="tabA" onclick="setTab('a')">★ All <span class="bdg bg" id="bA">0</span></button>
+  </div>
+  <div class="frow">
+    <input class="fi" id="srch" type="text" placeholder="🔍 search deals..." oninput="render()"/>
+    <select class="fi" id="srt" onchange="render()" style="max-width:130px">
+      <option value="new">Newest</option>
+      <option value="disc">Best %</option>
+      <option value="hot">Top Voted</option>
+    </select>
+  </div>
+  <div class="pills" id="pills"></div>
+</div>
+
+<!-- GRID -->
+<div class="grid" id="grid">
+  <div class="sbox">
+    <span class="sico">🎯</span>
+    <h3>READY TO HUNT</h3>
+    <p>Scanning 20+ sources — Slickdeals, 9to5Toys, CamelCamelCamel, Reddit &amp; more. Tap Scan to start.</p>
+  </div>
+</div>
+
+<footer><p>GlitchHunter v3 · Amazon Deal Radar · 20+ Sources · Serverless</p></footer>
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let D={glitches:[],deals:[]}, TAB='g', SRC='', cdId, nextScan=Date.now()+30*60*1000;
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function ago(ts){
+  if(!ts)return'';
+  const d=Date.now()-ts,m=Math.floor(d/60000);
+  if(m<1)return'just now';if(m<60)return m+'m ago';
+  const h=Math.floor(m/60);if(h<24)return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+
+// ── LOAD ──────────────────────────────────────────────────────────────────────
+async function load(){
+  const btn=$('scanBtn'), t0=Date.now();
+  btn.disabled=true; btn.classList.add('loading');
+  $('err').style.display='none';
+  $('grid').innerHTML='<div class="sbox"><div class="ring"></div><h3>SCANNING</h3><p>Sweeping 20+ sources for Amazon glitches and deals…</p></div>';
+
+  try{
+    const res=await fetch('/.netlify/functions/scrape-deals',{signal:AbortSignal.timeout(25000)});
+    if(!res.ok) throw new Error('Function returned '+res.status+'. Check Netlify deploy logs.');
+    const data=await res.json();
+    if(!data.ok) throw new Error(data.error||'Function error');
+
+    D={glitches:data.glitches||[],deals:data.deals||[]};
+    const all=[...D.glitches,...D.deals];
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);
+
+    // Stats
+    $('sG').textContent=data.stats.glitches;
+    $('sD').textContent=data.stats.deals;
+    $('sS').textContent=data.stats.sources;
+    $('sT').textContent=new Date(data.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    $('sTa').textContent=elapsed+'s scan';
+    $('bG').textContent=data.stats.glitches;
+    $('bD').textContent=data.stats.deals;
+    $('bA').textContent=data.stats.total;
+
+    // Reddit status
+    if(data.redditOn) $('rdSetup').classList.remove('show');
+    else $('rdSetup').classList.add('show');
+
+    // Source pills
+    const srcs=Object.keys(data.stats.sourceCounts||{}).sort((a,b)=>(data.stats.sourceCounts[b]||0)-(data.stats.sourceCounts[a]||0));
+    $('pills').innerHTML=
+      `<button class="pill ${!SRC?'active':''}" onclick="fSrc(event,'')">All</button>`+
+      srcs.map(s=>`<button class="pill ${SRC===s?'active':''}" onclick="fSrc(event,'${s.replace(/'/g,"\\'")}')">${esc(s)}</button>`).join('');
+
+    nextScan=Date.now()+30*60*1000;
+    startCd();
+    render();
+    if(D.glitches.length) notify(D.glitches);
+
+  }catch(e){
+    $('err').textContent='⚠ '+e.message;
+    $('err').style.display='block';
+    $('grid').innerHTML=`<div class="sbox"><span class="sico">❌</span><h3>SCAN FAILED</h3><p>${esc(e.message)}</p></div>`;
+  }finally{
+    btn.disabled=false; btn.classList.remove('loading');
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function render(){
+  const q=$('srch').value.toLowerCase(), s=$('srt').value;
+  let pool=TAB==='g'?[...D.glitches]:TAB==='d'?[...D.deals]:[...D.glitches,...D.deals];
+  if(SRC)  pool=pool.filter(d=>d.source===SRC);
+  if(q)    pool=pool.filter(d=>(d.title+' '+(d.desc||'')).toLowerCase().includes(q));
+  if(s==='disc')  pool.sort((a,b)=>(b.discount||0)-(a.discount||0));
+  else if(s==='hot') pool.sort((a,b)=>(b.score||0)-(a.score||0));
+  else pool.sort((a,b)=>b.timestamp-a.timestamp);
+
+  if(!pool.length){
+    $('grid').innerHTML=`<div class="sbox"><span class="sico">${TAB==='g'?'⚡':'🔍'}</span><h3>${TAB==='g'?'NO GLITCHES':'NO RESULTS'}</h3><p>${TAB==='g'?'No price errors found yet. Try All Deals or scan again.':'No deals match your filter.'}</p></div>`;
+    return;
+  }
+  $('grid').innerHTML=pool.map((d,i)=>card(d,i)).join('');
+}
+
+function card(d,i){
+  const isRd=d.source&&d.source.startsWith('r/');
+  const cls=['card',d.isGlitch?'glitch':'',isRd?'reddit':''].filter(Boolean).join(' ');
+  const link=d.link&&d.link.startsWith('http')?d.link:'#';
+  const ext=d.extLink&&d.extLink.startsWith('http')?d.extLink:null;
+  return`<div class="${cls}" style="animation-delay:${Math.min(i*30,400)}ms">
+    <div class="ctop">
+      <span class="src" style="background:${esc(d.color||'#333')}">${esc(d.source)}</span>
+      ${d.flair?`<span class="flr">${esc(d.flair)}</span>`:''}
+      ${d.isGlitch?'<span class="gchip">⚡ GLITCH</span>':''}
+    </div>
+    <div class="ctitle">${esc(d.title)}</div>
+    ${d.desc?`<div class="cdesc">${esc(d.desc)}</div>`:''}
+    <div class="cmeta">
+      ${d.score!=null?`<span class="mi">▲ ${d.score}</span>`:''}
+      ${d.comments!=null?`<span class="mi">💬 ${d.comments}</span>`:''}
+      <span class="tago">${ago(d.timestamp)}</span>
+    </div>
+    <div class="cbot">
+      <div class="pblock">
+        ${d.price?`<span class="price">${esc(d.price)}</span>`:''}
+        ${d.discount?`<span class="disc">-${d.discount}%</span>`:''}
+      </div>
+      <div class="brow">
+        ${ext?`<a href="${esc(ext)}" target="_blank" rel="noopener" class="vbtn">Deal ↗</a>`:''}
+        ${link!=='#'?`<a href="${esc(link)}" target="_blank" rel="noopener" class="vbtn ${isRd?'rdbtn':''}">${isRd?'Reddit ↗':'View ↗'}</a>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function setTab(t){
+  TAB=t;
+  ['G','D','A'].forEach(x=>$('tab'+x).classList.remove('active'));
+  $('tab'+{g:'G',d:'D',a:'A'}[t]).classList.add('active');
+  render();
+}
+function fSrc(e,s){
+  SRC=s;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  e.target.classList.add('active');
+  render();
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────────────────────────
+function startCd(){
+  if(cdId) clearInterval(cdId);
+  cdId=setInterval(()=>{
+    const left=Math.max(0,nextScan-Date.now());
+    const m=Math.floor(left/60000),s=Math.floor((left%60000)/1000);
+    $('cd').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if(left===0) load();
+  },1000);
+}
+
+// ── PANEL TOGGLE ──────────────────────────────────────────────────────────────
+function tog(p){
+  const pb=$(p+'Pb'), cr=$(p+'Caret');
+  pb.classList.toggle('open');
+  cr.textContent=pb.classList.contains('open')?'▲':'▼';
+}
+
+// ── TELEGRAM ─────────────────────────────────────────────────────────────────
+function saveTg(){
+  const tok=$('tgTok').value.trim(), cid=$('tgCid').value.trim();
+  if(!tok||!cid){setMsg('tgMsg','⚠ Enter both fields.');return;}
+  ls('gh3_tg_tok',tok); ls('gh3_tg_cid',cid);
+  ls('gh3_tg_go',$('tgGo').checked);
+  ls('gh3_tg_md',$('tgMd').checked);
+  $('tgDot').classList.add('on');
+  setMsg('tgMsg','Saved! Sending test…');
+  tgSend(tok,cid,'🎯 *GlitchHunter v3* connected! Amazon deal alerts active ⚡');
+}
+function clearTg(){
+  ['gh3_tg_tok','gh3_tg_cid','gh3_tg_go','gh3_tg_md'].forEach(k=>localStorage.removeItem(k));
+  $('tgTok').value=''; $('tgCid').value='';
+  $('tgDot').classList.remove('on');
+  setMsg('tgMsg','Cleared.');
+}
+async function tgSend(tok,cid,text){
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${tok}/sendMessage`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:cid,text,parse_mode:'Markdown',disable_web_page_preview:true}),
+    });
+    const j=await r.json();
+    setMsg('tgMsg',j.ok?'✅ Sent!':'❌ '+j.description);
+  }catch(e){setMsg('tgMsg','❌ '+e.message);}
+}
+function notify(glitches){
+  const tok=lg('gh3_tg_tok'), cid=lg('gh3_tg_cid');
+  if(!tok||!cid) return;
+  let items=glitches;
+  if(lg('gh3_tg_md')==='true') items=items.filter(d=>(d.discount||0)>=20);
+  if(!items.length) return;
+  const msg=`⚡ *GlitchHunter — ${items.length} Glitch${items.length>1?'es':''}!*\n\n`+
+    items.slice(0,5).map(d=>`• *${(d.title||'').slice(0,80)}*\n  ${d.source}${d.price?' · '+d.price:''}${d.discount?' · -'+d.discount+'%':''}\n  ${d.extLink||d.link||''}`).join('\n\n')+
+    (items.length>5?`\n\n_…and ${items.length-5} more_`:'');
+  tgSend(tok,cid,msg);
+}
+
+// ── REDDIT ────────────────────────────────────────────────────────────────────
+function saveRd(){
+  const id=$('rdId').value.trim(), sec=$('rdSec').value.trim();
+  if(!id||!sec){setMsg('rdMsg','⚠ Enter both fields.');return;}
+  ls('gh3_rd_id',id); ls('gh3_rd_sec',sec);
+  $('rdSetup').classList.remove('show');
+  setMsg('rdMsg','✅ Saved! Reddit feeds active on next scan.');
+}
+function clearRd(){
+  ['gh3_rd_id','gh3_rd_sec'].forEach(k=>localStorage.removeItem(k));
+  $('rdId').value=''; $('rdSec').value='';
+  setMsg('rdMsg','Cleared.');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const ls=(k,v)=>localStorage.setItem(k,v);
+const lg=k=>localStorage.getItem(k)||'';
+function setMsg(id,m){$(id).textContent=m;}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(function(){
+  const tok=lg('gh3_tg_tok'), cid=lg('gh3_tg_cid');
+  if(tok) $('tgTok').value=tok;
+  if(cid) $('tgCid').value=cid;
+  if(tok&&cid) $('tgDot').classList.add('on');
+  $('tgGo').checked=lg('gh3_tg_go')!=='false';
+  $('tgMd').checked=lg('gh3_tg_md')==='true';
+  const rid=lg('gh3_rd_id'), rsec=lg('gh3_rd_sec');
+  if(rid) $('rdId').value=rid;
+  if(rsec) $('rdSec').value=rsec;
+  if(!rid||!rsec) $('rdSetup').classList.add('show');
+  else $('rdSetup').classList.remove('show');
+  startCd();
+  setTimeout(load,800);
+})();
+</script>
+</body>
+</html>
