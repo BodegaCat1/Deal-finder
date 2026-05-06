@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>GlitchHunter — Mini PC Deal Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+
+:root{
+–bg:#07090e;–bg2:#0c1018;–bg3:#111822;–bg4:#161f2e;
+–border:#1a2535;–border2:#243045;
+–text:#c5d5e8;–dim:#4a6080;–mute:#1e2f42;
+–cyan:#00e5ff;–red:#ff3860;–green:#23ff8a;
+–gold:#ffd147;–purple:#c084fc;–orange:#ff8c42;
+–mono:‘IBM Plex Mono’,monospace;
+–display:‘Bebas Neue’,sans-serif;
+–sans:‘DM Sans’,sans-serif;
+–r:10px;
+}
+
+body{
+background:var(–bg);color:var(–text);
+font-family:var(–mono);font-size:13px;line-height:1.6;
+min-height:100vh;overflow-x:hidden;
+}
+
+/* scanlines */
+body::before{
+content:’’;position:fixed;inset:0;pointer-events:none;z-index:9999;
+background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,229,255,.007) 3px,rgba(0,229,255,.007) 4px);
+}
+
+/* glow */
+.glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+background:
+radial-gradient(ellipse 80% 40% at 50% -5%,rgba(0,229,255,.07) 0%,transparent 70%),
+radial-gradient(ellipse 50% 60% at 100% 70%,rgba(255,56,96,.04) 0%,transparent 60%);
+}
+
+.wrap{position:relative;z-index:1;max-width:700px;margin:0 auto;padding:0 14px 60px;}
+
+/* ── HEADER ── */
+header{
+padding:20px 0 16px;
+border-bottom:1px solid var(–border);
+display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+
+.logo{
+font-family:var(–display);font-size:28px;letter-spacing:2px;
+color:var(–cyan);text-shadow:0 0 24px rgba(0,229,255,.35);line-height:1;
+}
+.logo-sub{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(–dim);margin-top:3px;}
+
+.scan-btn{
+display:flex;align-items:center;gap:8px;
+background:var(–cyan);color:var(–bg);
+font-family:var(–mono);font-size:11px;font-weight:600;
+letter-spacing:1.5px;text-transform:uppercase;
+padding:11px 18px;border:none;border-radius:var(–r);
+cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0;
+-webkit-tap-highlight-color:transparent;
+}
+.scan-btn:active{transform:scale(.97);}
+.scan-btn:disabled{opacity:.4;cursor:not-allowed;}
+.scan-btn .spin{display:none;}
+.scan-btn.loading .spin{display:inline-block;animation:spin .6s linear infinite;}
+.scan-btn.loading .idle{display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── COUNTDOWN BAR ── */
+.countdown-bar{
+display:flex;align-items:center;justify-content:space-between;
+padding:10px 14px;
+background:var(–bg2);border-bottom:1px solid var(–border);
+font-size:10px;color:var(–dim);letter-spacing:1px;
+}
+.countdown-bar .next{color:var(–cyan);font-weight:600;font-size:13px;}
+.live-dot{
+width:7px;height:7px;border-radius:50%;background:var(–red);
+display:inline-block;margin-right:6px;
+animation:blink 1s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── STATS ── */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(–border);border-bottom:1px solid var(–border);}
+.stat{
+background:var(–bg2);padding:14px 16px;
+position:relative;
+}
+.stat::after{content:’’;position:absolute;bottom:0;left:16px;width:24px;height:2px;background:var(–stat-c,var(–dim));}
+.stat-l{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(–dim);margin-bottom:6px;}
+.stat-v{font-family:var(–display);font-size:28px;color:var(–stat-c,var(–cyan));line-height:1;letter-spacing:1px;}
+.stat-s{font-size:9px;color:var(–mute);margin-top:3px;}
+
+/* ── REDDIT BANNER ── */
+.reddit-banner{
+background:linear-gradient(135deg,rgba(255,140,66,.06),rgba(192,132,252,.06));
+border-left:3px solid var(–orange);
+padding:14px 16px;margin:14px 0;border-radius:var(–r);
+display:none;
+}
+.reddit-banner.show{display:block;}
+.reddit-banner h4{font-family:var(–sans);font-size:13px;font-weight:700;color:var(–orange);margin-bottom:8px;}
+.reddit-banner p{font-size:11px;color:var(–dim);line-height:1.8;}
+.reddit-banner a{color:var(–cyan);text-decoration:none;}
+.reddit-banner code{background:var(–bg3);border:1px solid var(–border2);border-radius:4px;padding:1px 6px;font-size:10px;}
+
+/* ── TELEGRAM ── */
+.tg-panel{
+background:var(–bg2);border:1px solid var(–border);
+border-left:3px solid var(–purple);border-radius:var(–r);
+margin:14px 0;overflow:hidden;
+}
+.tg-head{
+display:flex;align-items:center;justify-content:space-between;
+padding:13px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+.tg-head h4{font-family:var(–sans);font-size:13px;font-weight:700;color:var(–purple);display:flex;align-items:center;gap:8px;}
+.tg-dot{width:8px;height:8px;border-radius:50%;background:var(–mute);transition:background .3s;}
+.tg-dot.on{background:var(–green);box-shadow:0 0 8px rgba(35,255,138,.5);}
+.tg-caret{font-size:10px;color:var(–dim);}
+.tg-body{padding:0 16px 16px;display:none;}
+.tg-body.open{display:block;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(–dim);margin-bottom:5px;}
+.field input{
+width:100%;background:var(–bg3);border:1px solid var(–border);
+color:var(–text);font-family:var(–mono);font-size:12px;
+padding:10px 12px;border-radius:8px;outline:none;
+-webkit-appearance:none;
+}
+.field input:focus{border-color:var(–purple);}
+.tg-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px;}
+.tg-check{display:flex;align-items:center;gap:6px;font-size:11px;color:var(–dim);cursor:pointer;}
+.tg-check input{accent-color:var(–purple);width:15px;height:15px;}
+.tg-btns{display:flex;gap:8px;margin-top:12px;}
+.tg-btn{
+font-family:var(–mono);font-size:10px;font-weight:600;
+letter-spacing:1px;text-transform:uppercase;
+padding:10px 16px;border-radius:8px;cursor:pointer;
+-webkit-tap-highlight-color:transparent;flex:1;
+}
+.tg-save{background:rgba(192,132,252,.1);border:1px solid rgba(192,132,252,.3);color:var(–purple);}
+.tg-clear{background:transparent;border:1px solid rgba(255,56,96,.25);color:var(–red);}
+.tg-msg{font-size:10px;color:var(–dim);margin-top:8px;min-height:16px;}
+
+/* ── CONTROLS ── */
+.controls{padding:12px 0;display:flex;flex-direction:column;gap:10px;}
+.tabs{display:flex;background:var(–bg2);border:1px solid var(–border);border-radius:var(–r);overflow:hidden;}
+.tab{
+flex:1;font-family:var(–mono);font-size:10px;letter-spacing:1px;
+text-transform:uppercase;padding:11px 6px;
+background:transparent;border:none;color:var(–dim);
+cursor:pointer;transition:all .15s;border-right:1px solid var(–border);
+-webkit-tap-highlight-color:transparent;
+}
+.tab:last-child{border-right:none;}
+.tab.active{background:var(–bg3);color:#fff;}
+.tab.active.tg{color:var(–red);}
+.tab.active.td{color:var(–cyan);}
+.tab.active.ta{color:var(–gold);}
+.badge{
+display:inline-block;font-size:9px;font-weight:700;
+border-radius:3px;padding:1px 5px;margin-left:4px;vertical-align:middle;
+}
+.br{background:rgba(255,56,96,.2);color:var(–red);}
+.bc{background:rgba(0,229,255,.15);color:var(–cyan);}
+.bg{background:rgba(255,209,71,.15);color:var(–gold);}
+
+.filter-row{display:flex;gap:8px;}
+.filter-input{
+flex:1;background:var(–bg2);border:1px solid var(–border);
+color:var(–text);font-family:var(–mono);font-size:11px;
+padding:10px 12px;border-radius:8px;outline:none;
+-webkit-appearance:none;min-width:0;
+}
+.filter-input:focus{border-color:var(–border2);}
+.filter-input::placeholder{color:var(–mute);}
+
+/* ── ERROR ── */
+.err{
+background:rgba(255,56,96,.07);border:1px solid rgba(255,56,96,.2);
+border-radius:var(–r);padding:12px 16px;
+font-size:11px;color:var(–red);margin-bottom:12px;display:none;
+}
+
+/* ── CARDS ── */
+.grid{display:flex;flex-direction:column;gap:10px;}
+
+.card{
+background:var(–bg2);border:1px solid var(–border);
+border-radius:var(–r);padding:14px;
+display:flex;flex-direction:column;gap:10px;
+animation:fadeUp .25s ease both;position:relative;overflow:hidden;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.card.glitch{border-color:rgba(255,56,96,.3);}
+.card.glitch::before{
+content:’’;position:absolute;top:0;left:0;right:0;height:2px;
+background:linear-gradient(90deg,var(–red),#ff8c00,var(–red));
+background-size:200% 100%;animation:slide 2s linear infinite;
+}
+@keyframes slide{from{background-position:0 0}to{background-position:200% 0}}
+
+.card.reddit{border-left:2px solid #ff6314;}
+
+.card-top{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;}
+.src-chip{
+font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+padding:3px 8px;border-radius:4px;color:#fff;flex-shrink:0;
+}
+.flair{
+font-size:8px;padding:3px 8px;border-radius:4px;
+background:var(–bg4);color:var(–dim);border:1px solid var(–border);
+}
+.glitch-chip{
+font-size:8px;font-weight:700;letter-spacing:1px;
+padding:3px 8px;border-radius:4px;margin-left:auto;
+background:rgba(255,56,96,.15);color:var(–red);
+border:1px solid rgba(255,56,96,.3);
+animation:pulse 2s ease-in-out infinite;flex-shrink:0;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+.card-title{
+font-family:var(–sans);font-size:14px;font-weight:600;
+color:#ddeeff;line-height:1.4;
+}
+
+.card-desc{
+font-size:11px;color:var(–dim);line-height:1.6;
+display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+.card-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.meta-item{font-size:10px;color:var(–dim);display:flex;align-items:center;gap:4px;}
+.time-ago{font-size:9px;color:var(–mute);margin-left:auto;}
+
+.card-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.price-block{display:flex;align-items:baseline;gap:8px;}
+.price{font-family:var(–display);font-size:22px;letter-spacing:1px;color:var(–green);}
+.disc{
+font-size:9px;font-weight:700;
+background:rgba(35,255,138,.12);color:var(–green);
+border:1px solid rgba(35,255,138,.25);border-radius:4px;padding:2px 7px;
+}
+
+.btn-row{display:flex;gap:6px;}
+.btn{
+display:inline-flex;align-items:center;gap:5px;
+font-family:var(–mono);font-size:9px;font-weight:600;
+letter-spacing:1px;text-transform:uppercase;
+padding:9px 14px;border-radius:8px;
+text-decoration:none;border:1px solid var(–border2);color:var(–text);
+transition:all .15s;-webkit-tap-highlight-color:transparent;
+}
+.btn:active{transform:scale(.97);}
+.btn:hover{border-color:var(–cyan);color:var(–cyan);}
+.btn-reddit{border-color:rgba(255,99,20,.3);color:#ff6314;}
+
+/* ── STATE BOX ── */
+.state-box{text-align:center;padding:60px 20px;}
+.state-icon{font-size:44px;display:block;margin-bottom:16px;}
+.state-box h3{font-family:var(–display);font-size:26px;letter-spacing:2px;color:var(–text);margin-bottom:8px;}
+.state-box p{color:var(–dim);font-size:11px;max-width:300px;margin:0 auto;line-height:1.7;}
+.loader{width:40px;height:40px;border:2px solid var(–border2);border-top-color:var(–cyan);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px;}
+
+/* ── SOURCE PILLS ── */
+.pills{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0;}
+.pill{
+font-size:9px;letter-spacing:1px;text-transform:uppercase;
+padding:5px 10px;border-radius:20px;
+border:1px solid var(–border);color:var(–dim);
+cursor:pointer;background:transparent;font-family:var(–mono);
+-webkit-tap-highlight-color:transparent;
+}
+.pill.active{border-color:var(–cyan);color:var(–cyan);background:rgba(0,229,255,.06);}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(–border);padding:16px 0;margin-top:30px;text-align:center;}
+footer p{font-size:9px;color:var(–mute);letter-spacing:1.5px;text-transform:uppercase;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-track{background:var(–bg);}
+::-webkit-scrollbar-thumb{background:var(–border2);border-radius:2px;}
+</style>
+
+</head>
+<body>
+<div class="glow"></div>
+<div class="wrap">
+
+<!-- HEADER -->
+
+<header>
+  <div>
+    <div class="logo">GLITCHHUNTER</div>
+    <div class="logo-sub">Mini PC Deal Radar · v2</div>
+  </div>
+  <button class="scan-btn" id="scanBtn" onclick="loadDeals()">
+    <span class="idle">⚡ Scan</span>
+    <span class="spin">↻</span>
+  </button>
+</header>
+
+<!-- COUNTDOWN -->
+
+<div class="countdown-bar">
+  <span><span class="live-dot"></span>LIVE RADAR</span>
+  <span>Next scan: <span class="next" id="countdown">30:00</span></span>
+</div>
+
+<!-- STATS -->
+
+<div class="stats">
+  <div class="stat" style="--stat-c:var(--red)">
+    <div class="stat-l">⚡ Glitches</div>
+    <div class="stat-v" id="sG">—</div>
+    <div class="stat-s">price errors</div>
+  </div>
+  <div class="stat" style="--stat-c:var(--cyan)">
+    <div class="stat-l">🔥 Deals</div>
+    <div class="stat-v" id="sD">—</div>
+    <div class="stat-s">live mini PC</div>
+  </div>
+  <div class="stat" style="--stat-c:var(--green)">
+    <div class="stat-l">📡 Sources</div>
+    <div class="stat-v" id="sS">—</div>
+    <div class="stat-s">feeds active</div>
+  </div>
+  <div class="stat" style="--stat-c:var(--gold)">
+    <div class="stat-l">🕑 Scanned</div>
+    <div class="stat-v" id="sT" style="font-size:16px;padding-top:6px">—</div>
+    <div class="stat-s" id="sTa"></div>
+  </div>
+</div>
+
+<!-- REDDIT BANNER -->
+
+<div class="reddit-banner show" id="rdBanner">
+  <h4>⚙ Enable Reddit Feeds (Free · 2 min)</h4>
+  <p>
+    1. Go to <a href="https://www.reddit.com/prefs/apps" target="_blank">reddit.com/prefs/apps</a> → <b>Create another app</b><br>
+    2. Choose <b>script</b> · redirect URI: <code>http://localhost</code><br>
+    3. Copy <b>Client ID</b> + <b>Secret</b><br>
+    4. Enter them below in Reddit Settings ↓<br>
+    5. They're saved locally on your device — Reddit feeds activate instantly ✓
+  </p>
+</div>
+
+<!-- TELEGRAM -->
+
+<div class="tg-panel">
+  <div class="tg-head" onclick="togglePanel('tg')">
+    <h4><span class="tg-dot" id="tgDot"></span>📱 Telegram → BodPi Alerts</h4>
+    <span class="tg-caret" id="tgCaret">▼</span>
+  </div>
+  <div class="tg-body" id="tgBody">
+    <div class="field"><label>Bot Token</label><input type="password" id="tgTok" placeholder="1234567890:ABC..."/></div>
+    <div class="field"><label>Chat ID</label><input type="text" id="tgCid" placeholder="-100xxxxxxxxxx"/></div>
+    <div class="tg-row">
+      <label class="tg-check"><input type="checkbox" id="tgGo" checked/> Glitches only</label>
+      <label class="tg-check"><input type="checkbox" id="tgMd"/> Min 20% off</label>
+    </div>
+    <div class="tg-btns">
+      <button class="tg-btn tg-save" onclick="saveTg()">Save &amp; Test</button>
+      <button class="tg-btn tg-clear" onclick="clearTg()">Clear</button>
+    </div>
+    <div class="tg-msg" id="tgMsg"></div>
+  </div>
+</div>
+
+<!-- REDDIT CREDS (stored locally) -->
+
+<div class="tg-panel" id="rdPanel">
+  <div class="tg-head" onclick="togglePanel('rd')">
+    <h4>🔴 Reddit API Settings</h4>
+    <span class="tg-caret" id="rdCaret">▼</span>
+  </div>
+  <div class="tg-body" id="rdBody">
+    <div class="field"><label>Reddit Client ID</label><input type="text" id="rdId" placeholder="your client id"/></div>
+    <div class="field"><label>Reddit Secret</label><input type="password" id="rdSec" placeholder="your secret"/></div>
+    <div class="tg-btns">
+      <button class="tg-btn tg-save" onclick="saveRd()">Save Reddit Keys</button>
+      <button class="tg-btn tg-clear" onclick="clearRd()">Clear</button>
+    </div>
+    <div class="tg-msg" id="rdMsg"></div>
+  </div>
+</div>
+
+<!-- ERROR -->
+
+<div class="err" id="errBar"></div>
+
+<!-- CONTROLS -->
+
+<div class="controls">
+  <div class="tabs">
+    <button class="tab tg active" id="tabG" onclick="setTab('g')">⚡ Glitches <span class="badge br" id="bG">0</span></button>
+    <button class="tab td" id="tabD" onclick="setTab('d')">🔥 Deals <span class="badge bc" id="bD">0</span></button>
+    <button class="tab ta" id="tabA" onclick="setTab('a')">★ All <span class="badge bg" id="bA">0</span></button>
+  </div>
+  <div class="filter-row">
+    <input class="filter-input" id="srch" type="text" placeholder="🔍 search..." oninput="render()"/>
+    <select class="filter-input" id="srt" onchange="render()" style="max-width:130px">
+      <option value="new">Newest</option>
+      <option value="disc">Best Discount</option>
+      <option value="score">Top Voted</option>
+    </select>
+  </div>
+  <div class="pills" id="pills"></div>
+</div>
+
+<!-- GRID -->
+
+<div class="grid" id="grid">
+  <div class="state-box">
+    <span class="state-icon">🎯</span>
+    <h3>READY TO HUNT</h3>
+    <p>Tap Scan to sweep 12+ sources for mini PC glitches and live deals.</p>
+  </div>
+</div>
+
+<footer><p>GlitchHunter · Mini PC Deal Radar · RSS + Reddit API · Free &amp; Open</p></footer>
+</div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
+const CORS     = 'https://api.allorigins.win/raw?url=';
+
+const MINI_KW = [
+  'mini pc','mini computer','nuc','beelink','gmktec','minisforum',
+  'geekom','acemagic','kamrui','trigkey','aoostar','raspberry pi',
+  'mac mini','nucbox','ser5','ser6','ser7','ser8','mele','firebat',
+  'chatreey','morefine','thinkcentre tiny','optiplex micro','4x4 box',
+];
+const GLITCH_KW = [
+  'glitch','price error','price mistake','misprice','mispriced',
+  'accidental','wrong price','lowest ever','all time low','record low',
+  'lowest price','price drop','flash sale','coupon stack',
+];
+const DEAD_KW = [
+  'expired','out of stock','sold out','no longer available',
+  'deal ended','price changed','link dead','removed','deleted',
+  'oos','[expired]','(expired)','deal is dead','ymmv expired',
+];
+const EXCL_KW = ['phone','tablet','ipad','iphone','watch','headphone','airpod','earphone','kindle','echo dot','fire stick'];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let DATA = {glitches:[],deals:[]};
+let TAB  = 'g';
+let SRC  = '';
+let nextScan = Date.now() + 30*60*1000;
+let cdId;
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function ago(ts){
+  if(!ts) return '';
+  const d=Date.now()-ts, m=Math.floor(d/60000);
+  if(m<1)  return 'just now';
+  if(m<60) return m+'m ago';
+  const h=Math.floor(m/60);
+  if(h<24) return h+'h ago';
+  return Math.floor(h/24)+'d ago';
+}
+function classify(txt){
+  const t=txt.toLowerCase();
+  return{
+    relevant: MINI_KW.some(k=>t.includes(k)),
+    excluded: EXCL_KW.some(k=>t.includes(k)),
+    glitch:   GLITCH_KW.some(k=>t.includes(k)),
+    dead:     DEAD_KW.some(k=>t.includes(k)),
+    price:    (txt.match(/\$[\d,]+(?:\.\d{2})?/)||[null])[0],
+    discount: parseInt((txt.match(/(\d{1,3})%\s*off/i)||[,0])[1])||null,
+  };
+}
+
+// ── RSS FETCH ─────────────────────────────────────────────────────────────────
+async function fetchRSS(url, name, color){
+  try{
+    const api = `${RSS2JSON}${encodeURIComponent(url)}&count=30`;
+    const r   = await fetch(api, {signal: AbortSignal.timeout(8000)});
+    const j   = await r.json();
+    if(j.status !== 'ok') return [];
+    const now = Date.now();
+    return (j.items||[]).map(item=>{
+      const combined = (item.title||'')+' '+(item.description||'');
+      const c = classify(combined);
+      if(!c.relevant || c.excluded || c.dead) return null;
+      const ts = item.pubDate ? new Date(item.pubDate).getTime() : now;
+      if(now - ts > 72*60*60*1000) return null; // skip >72h old
+      return{
+        id:    btoa(item.title||'').slice(0,14),
+        title: (item.title||'').slice(0,120),
+        desc:  (item.description||'').replace(/<[^>]+>/g,'').slice(0,300),
+        link:  item.link||item.guid||'#',
+        source:name, color,
+        isGlitch: c.glitch,
+        price: c.price, discount: c.discount,
+        timestamp: ts,
+        score:null, comments:null, flair:null,
+      };
+    }).filter(Boolean);
+  }catch{return [];}
+}
+
+// ── REDDIT FETCH ──────────────────────────────────────────────────────────────
+async function fetchReddit(sub, query){
+  const rdId  = localStorage.getItem('gh_rd_id')||'';
+  const rdSec = localStorage.getItem('gh_rd_sec')||'';
+  try{
+    let url, headers={};
+    if(rdId && rdSec){
+      // Try OAuth token
+      try{
+        const tok = await getRedditToken(rdId, rdSec);
+        if(tok){
+          url = `https://oauth.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=1&limit=25&t=week`;
+          headers = {Authorization:`Bearer ${tok}`,'User-Agent':'GlitchHunter/2.0'};
+        }
+      }catch{}
+    }
+    if(!url){
+      url = `${CORS}${encodeURIComponent(`https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(query)}&sort=new&restrict_sr=1&limit=20&t=week`)}`;
+    }
+    const r = await fetch(url,{headers,signal:AbortSignal.timeout(8000)});
+    const j = await r.json();
+    const posts = j?.data?.children||[];
+    return posts.map(p=>{
+      const d=p.data;
+      const combined=(d.title||'')+' '+(d.selftext||'');
+      const c=classify(combined);
+      if(!c.relevant||c.excluded||c.dead) return null;
+      if(d.score<1) return null;
+      const extLink = d.url&&!d.url.includes('reddit.com')?d.url:null;
+      return{
+        id: d.id,
+        title:(d.title||'').slice(0,120),
+        desc:(d.selftext||'').replace(/\n+/g,' ').slice(0,300),
+        link:`https://reddit.com${d.permalink}`,
+        extLink, source:`r/${sub}`, color:'#ff6314',
+        isGlitch:c.glitch,
+        price:c.price, discount:c.discount,
+        timestamp:d.created_utc?d.created_utc*1000:Date.now(),
+        score:d.score||0, comments:d.num_comments||0,
+        flair:d.link_flair_text||null,
+      };
+    }).filter(Boolean);
+  }catch{return [];}
+}
+
+let rdToken={t:null,exp:0};
+async function getRedditToken(id,sec){
+  if(rdToken.t && Date.now()<rdToken.exp) return rdToken.t;
+  const r=await fetch('https://www.reddit.com/api/v1/access_token',{
+    method:'POST',
+    headers:{
+      Authorization:'Basic '+btoa(id+':'+sec),
+      'Content-Type':'application/x-www-form-urlencoded',
+      'User-Agent':'GlitchHunter/2.0',
+    },
+    body:'grant_type=client_credentials',
+    signal:AbortSignal.timeout(6000),
+  });
+  const j=await r.json();
+  if(!j.access_token) return null;
+  rdToken={t:j.access_token,exp:Date.now()+(j.expires_in-60)*1000};
+  return j.access_token;
+}
+
+// ── ALL SOURCES ───────────────────────────────────────────────────────────────
+const RSS_SOURCES=[
+  {url:'https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=mini+pc&rss=1',          name:'Slickdeals',     color:'#e63946'},
+  {url:'https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=beelink&rss=1',          name:'Slickdeals',     color:'#e63946'},
+  {url:'https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=gmktec&rss=1',           name:'Slickdeals',     color:'#e63946'},
+  {url:'https://slickdeals.net/newsearch.php?mode=frontpage&searcharea=deals&q=price+error+mini+pc&rss=1',name:'Slickdeals',   color:'#e63946'},
+  {url:'https://www.dealnews.com/c142/Computers/?srcval=rss_main',                                      name:'Dealnews',       color:'#2a9d8f'},
+  {url:'https://www.dealnews.com/c232/Electronics/?srcval=rss_main',                                    name:'Dealnews',       color:'#2a9d8f'},
+  {url:'https://9to5toys.com/feed/',                                                                     name:'9to5Toys',       color:'#0066cc'},
+  {url:'https://techbargains.com/feed/',                                                                 name:'TechBargains',   color:'#457b9d'},
+  {url:'https://bensbargains.com/feed/',                                                                 name:'BensBargains',   color:'#c77dff'},
+  {url:'https://camelcamelcamel.com/top_drops/feed?n=25',                                               name:'CamelCamelCamel',color:'#6a0572'},
+  {url:'https://www.hotukdeals.com/rss/deals/computers-accessories',                                    name:'HotUKDeals',     color:'#e76f51'},
+];
+const REDDIT_SOURCES=[
+  {sub:'buildapcsales',  q:'mini pc'},
+  {sub:'buildapcsales',  q:'beelink'},
+  {sub:'buildapcsales',  q:'gmktec'},
+  {sub:'buildapcsales',  q:'price error'},
+  {sub:'PCDeals',        q:'mini pc'},
+  {sub:'PCDeals',        q:'glitch'},
+  {sub:'Deals',          q:'mini pc'},
+  {sub:'DealAlert',      q:'mini pc'},
+  {sub:'frugal',         q:'mini pc glitch'},
+  {sub:'amazondealsusa', q:'mini pc'},
+];
+
+// ── LOAD ──────────────────────────────────────────────────────────────────────
+async function loadDeals(){
+  const btn=document.getElementById('scanBtn');
+  const grid=document.getElementById('grid');
+  const err=document.getElementById('errBar');
+  const t0=Date.now();
+
+  btn.disabled=true;btn.classList.add('loading');
+  err.style.display='none';
+
+  grid.innerHTML=`<div class="state-box"><div class="loader"></div><h3>SCANNING</h3><p>Checking Slickdeals, Reddit, 9to5Toys, CamelCamelCamel, Dealnews &amp; more…</p></div>`;
+
+  try{
+    // Fire all in parallel
+    const [rssResults, rdResults] = await Promise.all([
+      Promise.allSettled(RSS_SOURCES.map(s=>fetchRSS(s.url,s.name,s.color))),
+      Promise.allSettled(REDDIT_SOURCES.map(s=>fetchReddit(s.sub,s.q))),
+    ]);
+
+    const rssItems = rssResults.flatMap(r=>r.status==='fulfilled'?r.value:[]);
+    const rdItems  = rdResults.flatMap(r=>r.status==='fulfilled'?r.value:[]);
+    let all = [...rssItems,...rdItems];
+
+    // Dedup
+    const seen=new Set();
+    all=all.filter(d=>{
+      const k=d.title.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,35);
+      if(seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+
+    all.sort((a,b)=>b.timestamp-a.timestamp);
+
+    DATA.glitches = all.filter(d=>d.isGlitch);
+    DATA.deals    = all.filter(d=>!d.isGlitch);
+
+    const elapsed=((Date.now()-t0)/1000).toFixed(1);
+
+    document.getElementById('sG').textContent = DATA.glitches.length;
+    document.getElementById('sD').textContent = DATA.deals.length;
+    document.getElementById('sS').textContent = [...new Set(all.map(d=>d.source))].length;
+    document.getElementById('sT').textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('sTa').textContent= elapsed+'s scan';
+
+    document.getElementById('bG').textContent = DATA.glitches.length;
+    document.getElementById('bD').textContent = DATA.deals.length;
+    document.getElementById('bA').textContent = all.length;
+
+    // Source pills
+    const srcs=[...new Set(all.map(d=>d.source))].sort();
+    document.getElementById('pills').innerHTML=
+      `<button class="pill ${!SRC?'active':''}" onclick="filterSrc('')">All</button>`+
+      srcs.map(s=>`<button class="pill ${SRC===s?'active':''}" onclick="filterSrc('${s.replace(/'/g,"\\'")}')">${esc(s)}</button>`).join('');
+
+    // Hide reddit banner if reddit data came through
+    if(rdItems.length>0) document.getElementById('rdBanner').classList.remove('show');
+
+    nextScan=Date.now()+30*60*1000;
+    startCountdown();
+    render();
+
+    if(DATA.glitches.length) maybeNotify(DATA.glitches);
+
+  }catch(e){
+    err.textContent='⚠ Scan error: '+e.message;
+    err.style.display='block';
+    grid.innerHTML=`<div class="state-box"><span class="state-icon">❌</span><h3>SCAN FAILED</h3><p>${esc(e.message)}</p></div>`;
+  }finally{
+    btn.disabled=false;btn.classList.remove('loading');
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function render(){
+  const srch=document.getElementById('srch').value.toLowerCase();
+  const srt =document.getElementById('srt').value;
+  let pool = TAB==='g'?[...DATA.glitches]:TAB==='d'?[...DATA.deals]:[...DATA.glitches,...DATA.deals];
+  if(SRC)  pool=pool.filter(d=>d.source===SRC);
+  if(srch) pool=pool.filter(d=>(d.title+' '+(d.desc||'')).toLowerCase().includes(srch));
+  if(srt==='disc')  pool.sort((a,b)=>(b.discount||0)-(a.discount||0));
+  else if(srt==='score') pool.sort((a,b)=>(b.score||0)-(a.score||0));
+  else pool.sort((a,b)=>b.timestamp-a.timestamp);
+
+  const grid=document.getElementById('grid');
+  if(!pool.length){
+    grid.innerHTML=`<div class="state-box"><span class="state-icon">${TAB==='g'?'⚡':'🔍'}</span><h3>${TAB==='g'?'NO GLITCHES':'NO RESULTS'}</h3><p>${TAB==='g'?'No price errors detected. Try All Deals tab.':'No deals match your search.'}</p></div>`;
+    return;
+  }
+  grid.innerHTML=pool.map((d,i)=>card(d,i)).join('');
+}
+
+function card(d,i){
+  const isRd=d.source&&d.source.startsWith('r/');
+  const cls=['card',d.isGlitch?'glitch':'',isRd?'reddit':''].filter(Boolean).join(' ');
+  const delay=Math.min(i*30,400);
+  const link=d.link&&d.link.startsWith('http')?d.link:'#';
+  const ext =d.extLink&&d.extLink.startsWith('http')?d.extLink:null;
+  return`<div class="${cls}" style="animation-delay:${delay}ms">
+    <div class="card-top">
+      <span class="src-chip" style="background:${esc(d.color||'#333')}">${esc(d.source)}</span>
+      ${d.flair?`<span class="flair">${esc(d.flair)}</span>`:''}
+      ${d.isGlitch?'<span class="glitch-chip">⚡ GLITCH</span>':''}
+    </div>
+    <div class="card-title">${esc(d.title)}</div>
+    ${d.desc?`<div class="card-desc">${esc(d.desc)}</div>`:''}
+    <div class="card-meta">
+      ${d.score!==null?`<span class="meta-item">▲ ${d.score}</span>`:''}
+      ${d.comments!==null?`<span class="meta-item">💬 ${d.comments}</span>`:''}
+      <span class="time-ago">${ago(d.timestamp)}</span>
+    </div>
+    <div class="card-bottom">
+      <div class="price-block">
+        ${d.price?`<span class="price">${esc(d.price)}</span>`:''}
+        ${d.discount?`<span class="disc">-${d.discount}%</span>`:''}
+      </div>
+      <div class="btn-row">
+        ${ext?`<a href="${esc(ext)}" target="_blank" rel="noopener" class="btn">Deal ↗</a>`:''}
+        ${link!=='#'?`<a href="${esc(link)}" target="_blank" rel="noopener" class="btn ${isRd?'btn-reddit':''}">${isRd?'Reddit ↗':'View ↗'}</a>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── TABS + FILTER ─────────────────────────────────────────────────────────────
+function setTab(t){
+  TAB=t;
+  ['G','D','A'].forEach(x=>document.getElementById('tab'+x).classList.remove('active'));
+  const map={g:'G',d:'D',a:'A'};
+  document.getElementById('tab'+map[t]).classList.add('active');
+  render();
+}
+function filterSrc(s){
+  SRC=s;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  event.target.classList.add('active');
+  render();
+}
+
+// ── COUNTDOWN ─────────────────────────────────────────────────────────────────
+function startCountdown(){
+  if(cdId) clearInterval(cdId);
+  cdId=setInterval(()=>{
+    const left=Math.max(0,nextScan-Date.now());
+    const m=Math.floor(left/60000), s=Math.floor((left%60000)/1000);
+    document.getElementById('countdown').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if(left===0) loadDeals();
+  },1000);
+}
+
+// ── PANELS ────────────────────────────────────────────────────────────────────
+function togglePanel(p){
+  const body=document.getElementById(p+'Body');
+  const caret=document.getElementById(p+'Caret');
+  const open=body.classList.toggle('open');
+  caret.textContent=open?'▲':'▼';
+}
+
+// ── TELEGRAM ─────────────────────────────────────────────────────────────────
+function saveTg(){
+  const tok=document.getElementById('tgTok').value.trim();
+  const cid=document.getElementById('tgCid').value.trim();
+  if(!tok||!cid){setTgMsg('⚠ Enter both fields.');return;}
+  localStorage.setItem('gh_tg_tok',tok);
+  localStorage.setItem('gh_tg_cid',cid);
+  localStorage.setItem('gh_tg_go', document.getElementById('tgGo').checked);
+  localStorage.setItem('gh_tg_md', document.getElementById('tgMd').checked);
+  document.getElementById('tgDot').classList.add('on');
+  setTgMsg('Saved! Sending test…');
+  tgSend(tok,cid,'🎯 *GlitchHunter* connected! Mini PC deal alerts active. ⚡');
+}
+function clearTg(){
+  ['gh_tg_tok','gh_tg_cid','gh_tg_go','gh_tg_md'].forEach(k=>localStorage.removeItem(k));
+  document.getElementById('tgTok').value='';
+  document.getElementById('tgCid').value='';
+  document.getElementById('tgDot').classList.remove('on');
+  setTgMsg('Cleared.');
+}
+function setTgMsg(m){document.getElementById('tgMsg').textContent=m;}
+async function tgSend(tok,cid,text){
+  try{
+    const r=await fetch(`https://api.telegram.org/bot${tok}/sendMessage`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:cid,text,parse_mode:'Markdown',disable_web_page_preview:true}),
+    });
+    const j=await r.json();
+    setTgMsg(j.ok?'✅ Sent!':'❌ '+j.description);
+  }catch(e){setTgMsg('❌ '+e.message);}
+}
+function maybeNotify(glitches){
+  const tok=localStorage.getItem('gh_tg_tok')||'';
+  const cid=localStorage.getItem('gh_tg_cid')||'';
+  const md =localStorage.getItem('gh_tg_md')==='true';
+  if(!tok||!cid) return;
+  let items=glitches;
+  if(md) items=items.filter(d=>(d.discount||0)>=20);
+  if(!items.length) return;
+  const msg=`⚡ *GlitchHunter — ${items.length} Glitch${items.length>1?'es':''}!*\n\n`+
+    items.slice(0,5).map(d=>`• *${(d.title||'').slice(0,80)}*\n  ${d.source}${d.price?' · '+d.price:''}${d.discount?' · -'+d.discount+'%':''}\n  ${d.extLink||d.link||''}`).join('\n\n')+
+    (items.length>5?`\n\n_…and ${items.length-5} more_`:'');
+  tgSend(tok,cid,msg);
+}
+
+// ── REDDIT KEYS ───────────────────────────────────────────────────────────────
+function saveRd(){
+  const id =document.getElementById('rdId').value.trim();
+  const sec=document.getElementById('rdSec').value.trim();
+  if(!id||!sec){document.getElementById('rdMsg').textContent='⚠ Enter both fields.';return;}
+  localStorage.setItem('gh_rd_id',id);
+  localStorage.setItem('gh_rd_sec',sec);
+  document.getElementById('rdBanner').classList.remove('show');
+  document.getElementById('rdMsg').textContent='✅ Saved! Reddit feeds active on next scan.';
+}
+function clearRd(){
+  ['gh_rd_id','gh_rd_sec'].forEach(k=>localStorage.removeItem(k));
+  document.getElementById('rdId').value='';
+  document.getElementById('rdSec').value='';
+  document.getElementById('rdMsg').textContent='Cleared.';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+(function init(){
+  // Restore TG
+  const tok=localStorage.getItem('gh_tg_tok')||'';
+  const cid=localStorage.getItem('gh_tg_cid')||'';
+  if(tok) document.getElementById('tgTok').value=tok;
+  if(cid) document.getElementById('tgCid').value=cid;
+  if(tok&&cid) document.getElementById('tgDot').classList.add('on');
+  document.getElementById('tgGo').checked=localStorage.getItem('gh_tg_go')!=='false';
+  document.getElementById('tgMd').checked=localStorage.getItem('gh_tg_md')==='true';
+  // Restore Reddit keys
+  const rid=localStorage.getItem('gh_rd_id')||'';
+  const rsec=localStorage.getItem('gh_rd_sec')||'';
+  if(rid)  document.getElementById('rdId').value=rid;
+  if(rsec) document.getElementById('rdSec').value=rsec;
+  if(rid&&rsec) document.getElementById('rdBanner').classList.remove('show');
+  startCountdown();
+  setTimeout(loadDeals,600);
+})();
+</script>
+
+</body>
+</html>
